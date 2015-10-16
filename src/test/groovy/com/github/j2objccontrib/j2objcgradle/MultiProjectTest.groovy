@@ -8,7 +8,9 @@ import org.gradle.api.Project
 import org.gradle.nativeplatform.NativeBinarySpec
 import org.gradle.nativeplatform.NativeLibraryBinary
 import org.gradle.platform.base.BinarySpec
+import org.junit.After
 import org.junit.Before
+import org.junit.Ignore
 import org.junit.Test
 
 /**
@@ -42,21 +44,20 @@ class MultiProjectTest {
         ))
     }
 
+    @After
+    void tearDown() {
+        Utils.setFakeOSNone()
+    }
+
     @Test(expected = InvalidUserDataException)
     void twoProjectsWithDependsOnJ2objcLib_MissingPluginOnProject1() {
         j2objcConfig2.dependsOnJ2objcLib(proj1)
         j2objcConfig2.finalConfigure()
     }
 
+    @Ignore('https://github.com/j2objc-contrib/j2objc-gradle/issues/374')
     @Test
     void twoProjectsWithDependsOnJ2objcLib_Works() {
-        // TODO: fix this to run on Windows
-        // https://github.com/j2objc-contrib/j2objc-gradle/issues/374
-        // org.gradle.api.UnknownTaskException: Task with path 'releaseTestJ2objcExecutable' not found in project ':testProject8'
-        if (Utils.isWindowsNoFake()) {
-            return
-        }
-
         proj1.pluginManager.apply(J2objcPlugin)
         j2objcConfig1 = J2objcConfig.from(proj1)
         j2objcConfig1.finalConfigure()

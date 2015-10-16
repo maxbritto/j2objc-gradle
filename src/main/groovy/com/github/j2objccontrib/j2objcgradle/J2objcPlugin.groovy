@@ -21,6 +21,7 @@ import com.github.j2objccontrib.j2objcgradle.tasks.AssembleResourcesTask
 import com.github.j2objccontrib.j2objcgradle.tasks.AssembleSourceTask
 import com.github.j2objccontrib.j2objcgradle.tasks.CycleFinderTask
 import com.github.j2objccontrib.j2objcgradle.tasks.PackLibrariesTask
+import com.github.j2objccontrib.j2objcgradle.tasks.PodspecTask
 import com.github.j2objccontrib.j2objcgradle.tasks.TestTask
 import com.github.j2objccontrib.j2objcgradle.tasks.TranslateTask
 import com.github.j2objccontrib.j2objcgradle.tasks.Utils
@@ -46,13 +47,11 @@ class J2objcPlugin implements Plugin<Project> {
         String timestamp = BuildInfo.TIMESTAMP
         project.logger.info("j2objc-gradle plugin: Version $version, Built: $timestamp, Commit: $commit, URL: $url")
         if (!BuildInfo.GIT_IS_CLEAN) {
-            project.logger.error('j2objc-gradle plugin was built with local modification.\n' +
-                                 'If you encounter issues, please use an official release from:\n' +
-                                 '    https://github.com/j2objc-contrib/j2objc-gradle/releases')
+            project.logger.error('WARNING: j2objc-gradle plugin was built with local git modification: ' +
+                                 'https://github.com/j2objc-contrib/j2objc-gradle/releases')
         } else if (version.contains('SNAPSHOT')) {
-            project.logger.warn('j2objc-gradle plugin was built outside of an official release.\n' +
-                                'If you encounter issues, please use an official release from:\n' +
-                                '    https://github.com/j2objc-contrib/j2objc-gradle/releases')
+            project.logger.warn('WARNING: j2objc-gradle plugin was built with SNAPSHOT version: ' +
+                                'https://github.com/j2objc-contrib/j2objc-gradle/releases')
         }
 
         // This avoids a lot of "project." prefixes, such as "project.tasks.create"
@@ -63,11 +62,6 @@ class J2objcPlugin implements Plugin<Project> {
             extensions.create('j2objcConfig', J2objcConfig, project)
 
             afterEvaluate { Project evaluatedProject ->
-
-                // Validate minimally required parameters.
-                // j2objcHome() will throw the appropriate exception internally.
-                assert Utils.j2objcHome(evaluatedProject)
-
                 Utils.throwIfNoJavaPlugin(evaluatedProject)
 
                 if (!evaluatedProject.j2objcConfig.isFinalConfigured()) {
@@ -85,7 +79,8 @@ class J2objcPlugin implements Plugin<Project> {
 
             // This is an intermediate directory only.  Clients should use only directories
             // specified in j2objcConfig (or associated defaults in J2objcConfig).
-            File j2objcSrcGenDir = file("${buildDir}/j2objcSrcGen")
+            File j2objcSrcGenMainDir = file("${buildDir}/j2objcSrcGenMain")
+            File j2objcSrcGenTestDir = file("${buildDir}/j2objcSrcGenTest")
 
             // These configurations are groups of artifacts and dependencies for the plugin build
             // https://docs.gradle.org/current/dsl/org.gradle.api.artifacts.Configuration.html
@@ -97,6 +92,9 @@ class J2objcPlugin implements Plugin<Project> {
                     description = 'J2ObjC Java source dependencies that need to be ' +
                                   'partially translated via --build-closure'
                 }
+                // There is no corresponding j2objcTestTranslationClosure - building test code with
+                // --build-closure will almost certainly cause duplicate symbols when linked with
+                // main code.
 
                 // If you want to translate an entire source library, regardless of which parts of the
                 // library code your own code depends on, use this configuration.  This
@@ -110,11 +108,24 @@ class J2objcPlugin implements Plugin<Project> {
                     description = 'J2ObjC Java source libraries that should be fully translated ' +
                                   'and built as stand-alone native libraries'
                 }
+                // Some libraries also provide their test source in a Jar. For example:
+                //   dependencies { compile 'org.apache.commons:commons-compress:1.10:test-sources' }
+                // will cause your project to compile and run full Commons Compress test suite
+                // in both Java and Objective-C.
+                j2objcTestTranslation {
+                    description = 'J2ObjC Java test source code that should be fully translated ' +
+                                  'and built as stand-alone tests'
+                }
 
                 // Currently, we can only handle Project dependencies already translated to Objective-C.
                 j2objcLinkage {
                     description = 'J2ObjC native library dependencies that need to be ' +
-                                  'linked into the final library, and do not need translation'
+                                  'linked into the final main library, and do not need translation'
+                }
+
+                j2objcTestLinkage {
+                    description = 'J2ObjC native library dependencies that need to be ' +
+                                  'linked into the final tests, and do not need translation'
                 }
             }
 
@@ -138,12 +149,13 @@ class J2objcPlugin implements Plugin<Project> {
                     dependsOn: 'j2objcPreBuild') {
                 group 'build'
                 description "Translates all the java source files in to Objective-C using 'j2objc'"
-                additionalSrcFiles = files(
+                additionalMainSrcFiles = files(
                         fileTree(dir: "build/source/apt",
                                 include: "**/*.java")
                 )
-                // Output directory of 'j2objcTranslate', input for all other tasks
-                srcGenDir = j2objcSrcGenDir
+                // Output directories of 'j2objcTranslate', input for all other tasks
+                srcGenMainDir = j2objcSrcGenMainDir
+                srcGenTestDir = j2objcSrcGenTestDir
             }
 
             // j2objcCycleFinder is disabled by default as it's complex to use and understand.
@@ -169,7 +181,7 @@ class J2objcPlugin implements Plugin<Project> {
                 group 'verification'
                 // This transitively depends on the 'test' task from the java plugin
                 description 'Runs all tests in the generated Objective-C code'
-                buildType = 'debug'
+                buildType = 'Debug'
                 testBinaryFile = file("${buildDir}/binaries/testJ2objcExecutable/debug/testJ2objc")
             }
             tasks.create(name: 'j2objcTestRelease', type: TestTask,
@@ -177,7 +189,7 @@ class J2objcPlugin implements Plugin<Project> {
                 group 'verification'
                 // This transitively depends on the 'test' task from the java plugin
                 description 'Runs all tests in the generated Objective-C code'
-                buildType = 'release'
+                buildType = 'Release'
                 testBinaryFile = file("${buildDir}/binaries/testJ2objcExecutable/release/testJ2objc")
             }
             tasks.create(name: 'j2objcTest', type: DefaultTask,
@@ -204,8 +216,14 @@ class J2objcPlugin implements Plugin<Project> {
             }
 
             // Assemble
-            tasks.create(name: 'j2objcAssembleResources', type: AssembleResourcesTask,
+            tasks.create(name: 'j2objcPodspec', type: PodspecTask,
+                    // Podspec may reference sources and resources that haven't yet been built
                     dependsOn: ['j2objcPreBuild']) {
+                group 'build'
+                description 'Generate debug and release podspec that may be used for Xcode'
+            }
+            tasks.create(name: 'j2objcAssembleResources', type: AssembleResourcesTask,
+                    dependsOn: ['j2objcPreBuild', 'j2objcPodspec']) {
                 group 'build'
                 description 'Copies mains and test resources to assembly directories'
             }
@@ -213,10 +231,11 @@ class J2objcPlugin implements Plugin<Project> {
                     dependsOn: ['j2objcTranslate']) {
                 group 'build'
                 description 'Copies final generated source to assembly directories'
-                srcGenDir = j2objcSrcGenDir
+                srcGenMainDir = j2objcSrcGenMainDir
+                srcGenTestDir = j2objcSrcGenTestDir
             }
             tasks.create(name: 'j2objcAssembleDebug', type: AssembleLibrariesTask,
-                    dependsOn: ['j2objcPackLibrariesDebug', 'j2objcAssembleSource']) {
+                    dependsOn: ['j2objcPackLibrariesDebug', 'j2objcAssembleSource', 'j2objcAssembleResources']) {
                 group 'build'
                 description 'Copies final generated source and debug libraries to assembly directories'
                 buildType = 'Debug'
@@ -224,7 +243,7 @@ class J2objcPlugin implements Plugin<Project> {
                 srcPackedLibDir = file("${buildDir}/packedBinaries/${project.name}-j2objcStaticLibrary")
             }
             tasks.create(name: 'j2objcAssembleRelease', type: AssembleLibrariesTask,
-                    dependsOn: ['j2objcPackLibrariesRelease', 'j2objcAssembleSource']) {
+                    dependsOn: ['j2objcPackLibrariesRelease', 'j2objcAssembleSource', 'j2objcAssembleResources']) {
                 group 'build'
                 description 'Copies final generated source and release libraries to assembly directories'
                 buildType = 'Release'
@@ -232,7 +251,7 @@ class J2objcPlugin implements Plugin<Project> {
                 srcPackedLibDir = file("${buildDir}/packedBinaries/${project.name}-j2objcStaticLibrary")
             }
             tasks.create(name: 'j2objcAssemble', type: DefaultTask,
-                    dependsOn: ['j2objcAssembleDebug', 'j2objcAssembleRelease', 'j2objcAssembleResources']) {
+                    dependsOn: ['j2objcAssembleDebug', 'j2objcAssembleRelease']) {
                 group 'build'
                 description "Marker task for all assembly tasks that take part in regular j2objc builds"
             }

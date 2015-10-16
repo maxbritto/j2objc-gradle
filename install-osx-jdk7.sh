@@ -14,21 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-J2OBJC_VERSION=0.9.8.1
-mkdir localJ2objcDist
-mkdir common
+set -euv
 
-# Fail if any command fails
-set -e
+# What Java versions do we have?
+/usr/libexec/java_home -V
 
-pushd localJ2objcDist
+# Prep brew itself
+brew update
+brew outdated caskroom/cask/brew-cask || brew upgrade caskroom/cask/brew-cask
 
-# For developer local testing, don't keep redownloading the zip file.
-if [ ! -e j2objcDist.zip ]; then
-  curl -L https://github.com/google/j2objc/releases/download/$J2OBJC_VERSION/j2objc-$J2OBJC_VERSION.zip > j2objcDist.zip
-  unzip j2objcDist.zip
-  mv j2objc-$J2OBJC_VERSION j2objcDist
-  echo j2objc.home=$PWD/j2objcDist > ../common/local.properties
-fi
+# We must be able to get older Java versions than the latest.
+brew tap caskroom/versions
+sudo rm -rf /Library/Java/JavaVirtualMachines
+brew cask install caskroom/versions/java7
 
-popd
+# Fail unless we installed JDK 7 correctly.
+/usr/libexec/java_home --failfast --version 1.7

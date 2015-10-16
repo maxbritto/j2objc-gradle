@@ -42,5 +42,6 @@ dependencies {
 }
 
 j2objcConfig {
+    xcodeProjectDir = 'ios/IOS-SIMPLE1'
     finalConfigure()
 }

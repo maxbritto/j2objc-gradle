@@ -15,6 +15,7 @@
  */
 
 package com.github.j2objccontrib.j2objcgradle
+
 import com.github.j2objccontrib.j2objcgradle.tasks.Utils
 import com.google.common.annotations.VisibleForTesting
 import groovy.transform.CompileStatic
@@ -24,6 +25,7 @@ import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.tasks.util.PatternSet
 import org.gradle.util.ConfigureUtil
+
 /**
  * j2objcConfig is used to configure the plugin with the project's build.gradle.
  *
@@ -68,6 +70,17 @@ class J2objcConfig {
         destSrcTestDir = new File(project.buildDir, 'j2objcOutputs/src/test').absolutePath
         destLibDir = new File(project.buildDir, 'j2objcOutputs/lib').absolutePath
     }
+
+    /**
+     * Exact required version of j2objc.
+     */
+    String j2objcVersion = '0.9.8.2.1'
+
+    /**
+     * Don't verify J2ObjC binaries.  Useful for testing and power-users
+     * who know what they are doing and may wish to use a custom-build J2ObjC distribution.
+     */
+    boolean skipJ2objcVerification = false;
 
     /**
      * Where to assemble generated main libraries.
@@ -275,10 +288,11 @@ class J2objcConfig {
             "j2objc_guava.jar", "j2objc_junit.jar", "jre_emul.jar",
             // Libraries that don't need CycleFinder fixes
             "javax.inject-1.jar", "jsr305-3.0.0.jar",
-            "mockito-core-1.9.5.jar"]
+            "mockito-core-1.9.5.jar", "hamcrest-core-1.3.jar", "protobuf_runtime.jar"]
 
     /**
-     * Additional native libraries that are part of the j2objc distribution.
+     * Additional native libraries that are part of the j2objc distribution to link
+     * with the production code (and also the test code).
      * <p/>
      * For example:
      * <pre>
@@ -287,8 +301,16 @@ class J2objcConfig {
      */
     // J2objc default libraries, from $J2OBJC_HOME/lib/..., without '.a' extension.
     // TODO: auto add libraries based on java dependencies, warn on version differences
-    List<String> linkJ2objcLibs = ['guava', 'j2objc_main', 'javax_inject', 'jsr305']
+    List<String> linkJ2objcLibs = ['guava', 'javax_inject', 'jsr305', 'protobuf_runtime']
 
+    /**
+     * Additional native libraries that are part of the j2objc distribution to link
+     * with the test code.
+     */
+    // J2objc default libraries, from $J2OBJC_HOME/lib/..., without '.a' extension.
+    // TODO: auto add libraries based on java dependencies, warn on version differences
+    // Note: Hamcrest appears to be included within libjunit.a.
+    List<String> linkJ2objcTestLibs = ['junit', 'mockito', 'j2objc_main']
 
     // TODO: warn if different versions than testCompile from Java plugin
     /**
@@ -375,6 +397,16 @@ class J2objcConfig {
 
     protected NativeCompilation nativeCompilation
     /**
+     * Get J2ObjC project dependencies.
+     *
+     * Must not be modified by caller.
+     */
+    // TODO: ideally use immutable wrapper, not enough to justify Guava dependency
+    List<Project> getBeforeProjects() {
+        return nativeCompilation.beforeProjects
+    }
+
+    /**
      * Uses the generated headers and compiled j2objc libraries of the given project when
      * compiling this project.
      * <p/>
@@ -408,9 +440,9 @@ class J2objcConfig {
      * <p/>
      * By default, only common modern iOS architectures will be built:
      * ios_arm64, ios_armv7, ios_x86_64.  You may choose to add any of the remaining
-     * entries from NativeCompilation.ALL_SUPPORTED_ARCHS (ios_i386 and ios_armv7s)
+     * entries from NativeCompilation.ALL_IOS_ARCHS (ios_i386 and ios_armv7s)
      * to support all possible iOS architectures. Listing any new architectures outside of
-     * ALL_SUPPORTED_ARCHS will fail the build.
+     * ALL_IOS_ARCHS will fail the build.
      * <p/>
      * Removing an architecture here will cause that architecture not to be built
      * and corresponding gradle tasks to not be created.
@@ -424,7 +456,7 @@ class J2objcConfig {
      * <li>'ios_i386' => iOS Simulator on 32-bit OS X
      * <li>'ios_x86_64' => iOS Simulator on 64-bit OS X
      * </ul>
-     * @see NativeCompilation#ALL_SUPPORTED_ARCHS
+     * @see NativeCompilation#ALL_IOS_ARCHS
      */
     // Public to allow assignment of array of targets as shown in example
     List<String> supportedArchs = ['ios_arm64', 'ios_armv7', 'ios_x86_64']
@@ -450,7 +482,7 @@ class J2objcConfig {
         // instead we want no architectures at all in this case.
         enabledArchs.remove('')
         List<String> invalidArchs = enabledArchs.minus(
-                NativeCompilation.ALL_SUPPORTED_ARCHS.clone() as List<String>).toList()
+                NativeCompilation.ALL_IOS_ARCHS.clone() as List<String>).toList()
         if (!invalidArchs.isEmpty()) {
             throw new InvalidUserDataException("Invalid 'enabledArchs' entry: " + invalidArchs.join(', '))
         }
@@ -584,6 +616,29 @@ class J2objcConfig {
         extraNativeLibs.add(spec)
     }
 
+    /**
+     * The minimum iOS version to build against.  You cannot use APIs that are not supported
+     * in this version.
+     * <p/>
+     * See https://developer.apple.com/library/ios/documentation/DeveloperTools/Conceptual/cross_development/Configuring/configuring.html#//apple_ref/doc/uid/10000163i-CH1-SW2
+     */
+    String minIosVersion = '8.3'
+
+    /**
+     * The minimum OS X version to build against.  You cannot use APIs that are not supported
+     * in this version.
+     * <p/>
+     * See https://developer.apple.com/library/ios/documentation/DeveloperTools/Conceptual/cross_development/Configuring/configuring.html#//apple_ref/doc/uid/10000163i-CH1-SW2
+     */
+    String minOsxVersion = '10.8'
+
+    /**
+     * The minimum Watch OS version to build against.  You cannot use APIs that are not supported
+     * in this version.
+     * <p/>
+     * See https://developer.apple.com/library/ios/documentation/DeveloperTools/Conceptual/cross_development/Configuring/configuring.html#//apple_ref/doc/uid/10000163i-CH1-SW2
+     */
+    String minWatchosVersion = '2.0'
 
     // XCODE
     /**
@@ -595,14 +650,27 @@ class J2objcConfig {
      */
     String xcodeProjectDir = null
     /**
-     * Xcode app target the generated library should be linked to.
+     * Xcode app targets that should be linked to the generated library.
      *
-     * This will automatically add linkage for any target that starts with the
-     * same name. This should include any Test and Watch targets. For the example of
-     * xcodeTarget == 'IOS-APP', it will add targets for 'IOS-APPTests',
-     * 'IOS-APP WatchKit App' & 'IOS-APP WatchKit Extension' (if they exist).
+     * This will automatically add linkage for any target in the specified list
+     * to the generated shared library. This should include any Test and Watch
+     * targets if needed.
+     *
+     * If empty (default), it will link all targets defined within the Xcode project.
      */
-    String xcodeTarget = null
+    List<String> xcodeTargets = new ArrayList<>()
+    /**
+     * Add targets within Xcode to link to the generated shared library.
+     *
+     * If this is never called, it will default to linking all targets
+     * to the generated shared library.
+     *
+     * @param xcodeTargets links targets to generated library.
+     */
+    void xcodeTargets(String... xcodeTargets) {
+        appendArgs(this.xcodeTargets, 'xcodeTargets', xcodeTargets)
+    }
+
 
 
     protected boolean finalConfigured = false
@@ -625,7 +693,78 @@ class J2objcConfig {
         finalConfigured = true
     }
 
+    public static final String MIN_SUPPORTED_J2OBJC_VERSION = '0.9.8.2.1'
+
+    protected void verifyJ2objcRequirements() {
+        if (skipJ2objcVerification) {
+            return
+        }
+
+        if (!Utils.isAtLeastVersion(j2objcVersion, MIN_SUPPORTED_J2OBJC_VERSION)) {
+            String requestedVersion = j2objcVersion
+            // j2objcVersion is used for instructing the user how to install j2objc
+            // so we should use the version we need, not the bad one the user requested.
+            j2objcVersion = MIN_SUPPORTED_J2OBJC_VERSION
+            Utils.throwJ2objcConfigFailure(project,
+                    "Must use at least J2ObjC version $MIN_SUPPORTED_J2OBJC_VERSION; you requested $requestedVersion.")
+        }
+
+        // Make sure we have *some* J2ObjC distribution identified.
+        // This will throw a proper out-of-box error if misconfigured.
+        String j2objcHome = Utils.j2objcHome(project)
+
+        // Verify that underlying J2ObjC binary exists at all.
+        File j2objcJar = Utils.j2objcJar(project)
+        if (!j2objcJar.exists()) {
+            Utils.throwJ2objcConfigFailure(project, "J2ObjC binary does not exist at ${j2objcJar.absolutePath}.")
+        }
+
+        // Now check the version of the binary against the version required.
+        String j2objcExecutable = "$j2objcHome/j2objc"
+        List<String> windowsOnlyArgs = new ArrayList<String>()
+        if (Utils.isWindows()) {
+            j2objcExecutable = 'java'
+            windowsOnlyArgs.add('-jar')
+            windowsOnlyArgs.add(j2objcJar.absolutePath)
+        }
+
+        ByteArrayOutputStream stdout = new ByteArrayOutputStream()
+        ByteArrayOutputStream stderr = new ByteArrayOutputStream()
+
+        project.logger.debug('VerifyJ2objcRequirements - projectExec:')
+        try {
+            Utils.projectExec(project, stdout, stderr, null, {
+                executable j2objcExecutable
+                windowsOnlyArgs.each { String windowsOnlyArg ->
+                    args windowsOnlyArg
+                }
+
+                // Arguments
+                args "-version"
+
+                setStandardOutput stdout
+                setErrorOutput stderr
+            })
+
+        } catch (Exception exception) {
+            // Likely too old to understand -version,
+            // but include the error since it could be something else.
+            Utils.throwJ2objcConfigFailure(project, exception.toString() + "\n\n" +
+                                                    "J2ObjC binary at $j2objcHome too old, v$j2objcVersion required.")
+        }
+        // Yes, J2ObjC uses stderr to output the version.
+        String actualVersionString = stderr.toString().trim()
+        if (actualVersionString != "j2objc $j2objcVersion".toString()) {
+            // Note that actualVersionString will usually already have the word 'j2objc' in it.
+            Utils.throwJ2objcConfigFailure(project,
+                    "Found $actualVersionString at $j2objcHome, J2ObjC v$j2objcVersion required.")
+        }
+    }
+
     protected void validateConfiguration() {
+        // Validate minimally required parameters.
+        verifyJ2objcRequirements()
+
         assert destLibDir != null
         assert destSrcMainDir != null
         assert destSrcTestDir != null
@@ -636,7 +775,8 @@ class J2objcConfig {
         // after initial creation, we can remove this, and have methods on this object
         // mutate the existing native model { } block.  See:
         // https://discuss.gradle.org/t/problem-with-model-block-when-switching-from-2-2-1-to-2-4/9937
-        nativeCompilation.apply(project.file("${project.buildDir}/j2objcSrcGen"))
+        nativeCompilation.apply(project.file("${project.buildDir}/j2objcSrcGenMain"),
+                                project.file("${project.buildDir}/j2objcSrcGenTest"))
     }
 
     protected void convertDeps() {
@@ -724,6 +864,8 @@ class J2objcConfig {
         // before calling finalConfigure.
         project.configurations.create('j2objcTranslationClosure')
         project.configurations.create('j2objcTranslation')
+        project.configurations.create('j2objcTestTranslation')
         project.configurations.create('j2objcLinkage')
+        project.configurations.create('j2objcTestLinkage')
     }
 }

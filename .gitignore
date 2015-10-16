@@ -1,10 +1,37 @@
 # Temp files
 *~
 .gradle
-build
+
 # Don't save away IntelliJ config, except code-style which all commits must follow.
 .idea/*
 !.idea/codeStyleSettings.xml
 j2objc-gradle.iml
 
 local.properties
+
+
+## Build generated
+build
+DerivedData
+
+# COCOAPODS
+Pods
+
+# Xcode
+# https://github.com/github/gitignore/blob/master/Global/Xcode.gitignore
+
+## Various settings
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+
+## Other
+*.xccheckout
+*.moved-aside
+*.xcuserstate
