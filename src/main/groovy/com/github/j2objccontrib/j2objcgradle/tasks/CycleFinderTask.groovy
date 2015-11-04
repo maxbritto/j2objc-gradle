@@ -54,7 +54,7 @@ class CycleFinderTask extends DefaultTask {
         // solely an input to this method, which is already an input (via @InputFiles).
         FileTree allFiles = Utils.srcSet(project, 'main', 'java')
         allFiles = allFiles.plus(Utils.srcSet(project, 'test', 'java'))
-        FileTree ret = allFiles
+        FileTree ret = allFiles.plus(Utils.javaTrees(project, getGeneratedSourceDirs()))
         if (J2objcConfig.from(project).translatePattern != null) {
             ret = allFiles.matching(J2objcConfig.from(project).translatePattern)
         }
@@ -64,13 +64,10 @@ class CycleFinderTask extends DefaultTask {
     // All input files that could affect translation output, except those in j2objc itself.
     @InputFiles
     UnionFileCollection getAllInputFiles() {
-        // Only care about changes in the generatedSourceDirs paths and not the contents
-        // Assumes that any changes in generated code causes change in non-generated @Input
         return new UnionFileCollection([
                 getSrcInputFiles(),
                 project.files(getTranslateClasspaths()),
-                project.files(getTranslateSourcepaths()),
-                project.files(getGeneratedSourceDirs())
+                project.files(getTranslateSourcepaths())
         ])
     }
 
@@ -123,10 +120,6 @@ class CycleFinderTask extends DefaultTask {
         // vs. translate task.  Here they are directly passed to the binary, but in translate
         // they are only on the translate source path (meaning they will only be translated with --build-closure).
 
-        // Generated Files
-        // Assumes that any changes in generated code causes change in non-generated @Input
-        fullSrcFiles = fullSrcFiles.plus(Utils.javaTrees(project, getGeneratedSourceDirs()))
-
         UnionFileCollection sourcepathDirs = new UnionFileCollection([
                 project.files(Utils.srcSet(project, 'main', 'java').getSrcDirs()),
                 project.files(Utils.srcSet(project, 'test', 'java').getSrcDirs()),
@@ -176,13 +169,13 @@ class CycleFinderTask extends DefaultTask {
             logger.debug("CycleFinder found 0 cycles")
             assert 0 == getCycleFinderExpectedCycles()
 
-        } catch (Exception exception) {
+        } catch (Exception exception) {  // NOSONAR
             // ExecException is converted to InvalidUserDataException in Utils.projectExec(...)
 
             if (!Utils.isProjectExecNonZeroExit(exception)) {
                 throw exception
             }
-            
+
             String cyclesFoundStr = Utils.matchRegexOutputs(stdout, stderr, cyclesFoundRegex)
             if (!cyclesFoundStr?.isInteger()) {
                 String message =

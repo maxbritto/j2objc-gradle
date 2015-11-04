@@ -66,9 +66,11 @@ class J2objcConfig {
         nativeCompilation = new NativeCompilation(project)
 
         // Provide defaults for assembly output locations.
+        destLibDir = new File(project.buildDir, 'j2objcOutputs/lib').absolutePath
+        // Can't be in subdirectory as podspec paths must be relative and not traverse parent ('..')
+        destPodspecDir = new File(project.buildDir, 'j2objcOutputs').absolutePath
         destSrcMainDir = new File(project.buildDir, 'j2objcOutputs/src/main').absolutePath
         destSrcTestDir = new File(project.buildDir, 'j2objcOutputs/src/test').absolutePath
-        destLibDir = new File(project.buildDir, 'j2objcOutputs/lib').absolutePath
     }
 
     /**
@@ -81,6 +83,13 @@ class J2objcConfig {
      * who know what they are doing and may wish to use a custom-build J2ObjC distribution.
      */
     boolean skipJ2objcVerification = false;
+
+    /**
+     * Where to assemble generated main libraries.
+     * <p/>
+     * Defaults to $buildDir/j2objcOutputs
+     */
+    String destPodspecDir = null
 
     /**
      * Where to assemble generated main libraries.
@@ -125,20 +134,21 @@ class J2objcConfig {
         return project.file(new File(destSrcDir, fileType))
     }
 
+    File getDestPodspecDirFile() {
+        return project.file(destPodspecDir)
+    }
+
     /**
      * Generated source files directories, e.g. from dagger annotations.
-     * <p/>
-     * The plugin will ignore changes in this directory so they must
-     * be limited to files generated solely from files within your
-     * main and/or test sourceSets.
      */
-    List<String> generatedSourceDirs = new ArrayList<>()
+    // Default location for generated source files using annotation processor compilation,
+    // per sourceSets.main.output.classesDir.
+    // However, we cannot actually access sourceSets.main.output.classesDir here, because
+    // the Java plugin convention may not be applied at this time.
+    // TODO: Add a test counterpart for this.
+    List<String> generatedSourceDirs = ['build/classes/main']
     /**
      * Add generated source files directories, e.g. from dagger annotations.
-     * <p/>
-     * The plugin will ignore changes in this directory so they must
-     * be limited to files generated solely from files within your
-     * main and/or test sourceSets.
      *
      * @param generatedSourceDirs adds generated source directories for j2objc translate
      */
@@ -631,8 +641,9 @@ class J2objcConfig {
      * <p/>
      * See https://developer.apple.com/library/ios/documentation/DeveloperTools/Conceptual/cross_development/Configuring/configuring.html#//apple_ref/doc/uid/10000163i-CH1-SW2
      */
-    // Matches the oldest version supported in Xcode 7
-    String minVersionOsx = '10.4'
+    // Oldest OS X version that supports automatic reference counting (2009 onwards)
+    // Prevents Xcode error: "-fobjc-arc is not supported on versions of OS X prior to 10.6"
+    String minVersionOsx = '10.6'
 
     /**
      * The minimum Watch OS version to build against.  You cannot use APIs that are not supported
@@ -775,7 +786,7 @@ class J2objcConfig {
                 setErrorOutput stderr
             })
 
-        } catch (Exception exception) {
+        } catch (Exception exception) {  // NOSONAR
             // Likely too old to understand -version,
             // but include the error since it could be something else.
             Utils.throwJ2objcConfigFailure(project, exception.toString() + "\n\n" +
@@ -795,8 +806,16 @@ class J2objcConfig {
         verifyJ2objcRequirements()
 
         assert destLibDir != null
+        assert destPodspecDir != null
         assert destSrcMainDir != null
         assert destSrcTestDir != null
+
+        // TODO: watchOS build support
+        if (xcodeTargetsWatchos.size() > 0) {
+            throw new InvalidUserDataException(
+                    "WatchOS isn't yet supported, please unset xcodeTargetsWatchos for now." +
+                    "Follow this issue for updates: https://github.com/j2objc-contrib/j2objc-gradle/issues/525")
+        }
     }
 
     protected void configureNativeCompilation() {
@@ -828,6 +847,8 @@ class J2objcConfig {
             Utils.requireMacOSX('Native Compilation of translated code task')
         }
 
+        project.logger.info("J2objcPlugin: translateOnlyMode will disable most j2objc tasks")
+
         project.tasks.all { Task task ->
             String name = task.name
             // For convenience, disable all debug and/or release tasks if the user desires.
@@ -848,7 +869,8 @@ class J2objcConfig {
                 // First pattern matches all native-compilation tasks.
                 // Second pattern matches plugin-specific tasks beyond translation.
                 if ((name =~ /^.*((J|j)2objc(Executable|StaticLibrary|SharedLibrary|Objc))$/).matches() ||
-                    (name =~ /^j2objc(Assemble|PackLibraries|Test)(Debug|Release)$/).matches()) {
+                    (name =~ /^j2objc(Assemble|PackLibraries|Test)(Debug|Release)$/).matches() ||
+                    (name =~ /^j2objc(Podspec|Xcode)$/).matches()) {
                     task.enabled = false
                 }
             }

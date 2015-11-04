@@ -17,7 +17,6 @@
 package com.github.j2objccontrib.j2objcgradle.tasks
 
 import com.github.j2objccontrib.j2objcgradle.J2objcConfig
-import com.google.common.annotations.VisibleForTesting
 import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
@@ -41,7 +40,7 @@ class XcodeTaskTest {
             new XcodeTask.XcodeTargetDetails(
                     ['IOS-APP'], [], [],
                     // Append '.0' to version number to check that it's not using defaults
-                    '6.0.0', '10.4.0', '1.0.0')
+                    '6.0.0', '10.6.0', '1.0.0')
     List<XcodeTask.PodspecDetails> podspecDetailsProj =
             [new XcodeTask.PodspecDetails(
                 'PROJ',
@@ -64,32 +63,48 @@ class XcodeTaskTest {
     }
 
     @Test
-    void getPodfileFile_Valid() {
+    void testPodspecDetails_serialization() {
+        // From: http://stackoverflow.com/a/9775330/1509221
+        XcodeTask.PodspecDetails podspecDetailsIn = new XcodeTask.PodspecDetails(
+                'pname', new File('fileDebug'), new File('fileRelease'))
+
+        ByteArrayOutputStream bOut = new ByteArrayOutputStream()
+        ObjectOutputStream sOut = new ObjectOutputStream(bOut)
+        sOut.writeObject(podspecDetailsIn)
+        sOut.close()
+
+        byte[] payload = bOut.toByteArray()
+
+        ByteArrayInputStream bIn = new ByteArrayInputStream(payload);
+        ObjectInputStream sIn = new ObjectInputStream(bIn)
+        XcodeTask.PodspecDetails podspecDetailsOut = (XcodeTask.PodspecDetails) sIn.readObject()
+
+        assert 'pname' == podspecDetailsOut.projectName
+        assert 'fileDebug' == podspecDetailsOut.podspecDebug.path
+        assert 'fileRelease' == podspecDetailsOut.podspecRelease.path
+    }
+
+    @Test
+    // Check that the project name is converted to a valid ruby method name
+    // http://stackoverflow.com/a/10542599/1509221
+    void testPodspecDetails_getPodMethodName_validForRuby() {
+        XcodeTask.PodspecDetails podspecDetails = new XcodeTask.PodspecDetails(
+                'project-NAME_09.!?=', null, null)
+        assert 'j2objc_project_NAME_09____' == podspecDetails.getPodMethodName()
+    }
+
+    @Test
+    void testGetPodfileFile_Valid() {
         J2objcConfig j2objcConfig =
                 proj.extensions.create('j2objcConfig', J2objcConfig, proj)
         j2objcConfig.xcodeProjectDir = '../ios'
         j2objcConfig.xcodeTargetsIos = ['IOS-APP']
 
         XcodeTask j2objcXcode = (XcodeTask) proj.tasks.create(name: 'j2objcXcode', type: XcodeTask)
-        j2objcXcode.verifyXcodeArgs()
         File podfile = j2objcXcode.getPodfileFile()
 
         String expectedPath = proj.file('../ios/Podfile').absolutePath
         assert expectedPath == podfile.absolutePath
-    }
-
-    // Test that null xcode arguments cause the expected exception
-    @Test(expected = InvalidUserDataException.class)
-    void getPodfileFile_Invalid() {
-        J2objcConfig j2objcConfig =
-                proj.extensions.create('j2objcConfig', J2objcConfig, proj)
-        assert null == j2objcConfig.xcodeProjectDir
-        assert 0 == j2objcConfig.xcodeTargetsIos.size()
-
-        XcodeTask j2objcXcode = (XcodeTask) proj.tasks.create(name: 'j2objcXcode', type: XcodeTask)
-
-        // Test for fixing issue #226
-        j2objcXcode.getPodfileFile()
     }
 
     @Test
@@ -123,7 +138,7 @@ class XcodeTaskTest {
 
         j2objcConfig.xcodeProjectDir = '../ios'
         j2objcConfig.xcodeTargetsIos = ['IOS-APP', 'IOS-APPTests']
-        j2objcConfig.minVersionIos = '6.0.0'
+        j2objcConfig.minVersionIos = '6.1.0'
 
         // Podfile Write
         // This is outside of the project's temp directory but appears to work fine
@@ -165,7 +180,7 @@ class XcodeTaskTest {
         String podNameMethod = "j2objc_${proj.name}"
         String podNameDebug = "j2objc-${proj.name}-debug"
         String podNameRelease = "j2objc-${proj.name}-release"
-        String path = "../${proj.getProjectDir().getName()}/build"
+        String path = "../${proj.getProjectDir().getName()}/build/j2objcOutputs"
         List<String> expectedPodfile = [
                 "use_frameworks!",
                 "",
@@ -176,12 +191,12 @@ class XcodeTaskTest {
                 "end",
                 "",
                 "target 'IOS-APP' do",
-                "    platform :ios, '6.0.0'",
+                "    platform :ios, '6.1.0'",
                 "    $podNameMethod",
                 "end",
                 "",
                 "target 'IOS-APPTests' do",
-                "    platform :ios, '6.0.0'",
+                "    platform :ios, '6.1.0'",
                 "    $podNameMethod",
                 "end"]
         List<String> readPodfileLines = podfile.readLines()
@@ -217,30 +232,12 @@ class XcodeTaskTest {
             assert exception.toString().contains('Within that directory, create the Podfile with:')
             assert exception.toString().contains("(cd ${proj.file('ios').absolutePath} && pod init)")
             assert exception.toString().contains('sudo gem install cocoapods')
+            assert exception.toString().contains('.xcworkspace')
+            assert exception.toString().contains('bridging header')
         }
 
         // Verify no calls to project.copy, project.delete or project.exec
         mockProjectExec.verify()
-    }
-
-    @Test
-    void testVerifyXcodeArgs() {
-        Object unused
-        J2objcConfig j2objcConfig
-        (proj, unused, j2objcConfig) =
-                TestingUtils.setupProject(new TestingUtils.ProjectConfig(
-                        applyJavaPlugin: true,
-                        createJ2objcConfig: true))
-        assert null == j2objcConfig.xcodeProjectDir
-        assert 0 == j2objcConfig.xcodeTargetsIos.size()
-
-        XcodeTask j2objcXcode = (XcodeTask) proj.tasks.create(name: 'j2objcXcode', type: XcodeTask)
-
-        // Expect exception suggesting to configure j2objcConfig:
-        expectedException.expect(InvalidUserDataException.class)
-        expectedException.expectMessage("xcodeProjectDir '../ios'")
-
-        j2objcXcode.verifyXcodeArgs()
     }
 
     @Test
@@ -433,7 +430,7 @@ class XcodeTaskTest {
                 new File(podspecBuildDir + '/j2objc-PROJ-debug.podspec'),
                 new File(podspecBuildDir + '/j2objc-PROJ-release.podspec')))
         XcodeTask.writeUpdatedPodfileIfNeeded(
-                podspecDetailsList, xcodeTargetDetailsIosAppOnly, podfile, null)
+                podspecDetailsList, xcodeTargetDetailsIosAppOnly, podfile)
 
         // Verify modified Podfile
         List<String> expectedLines = [
@@ -454,7 +451,7 @@ class XcodeTaskTest {
         // Verify unmodified on second call
         // TODO: verify that file wasn't written a second time
         XcodeTask.writeUpdatedPodfileIfNeeded(
-                podspecDetailsList, xcodeTargetDetailsIosAppOnly, podfile, null)
+                podspecDetailsList, xcodeTargetDetailsIosAppOnly, podfile)
         readPodfileLines = podfile.readLines()
         assert expectedLines == readPodfileLines
     }
@@ -469,8 +466,7 @@ class XcodeTaskTest {
                 podfileLines,
                 podspecDetailsProj,
                 xcodeTargetDetailsIosAppOnly,
-                new File('/SRC/ios/Podfile'),
-                null)
+                new File('/SRC/ios/Podfile'))
 
         List<String> expectedPodfileLines = [
                 "# J2ObjC Gradle Plugin - DO NOT MODIFY from here to the first target",
@@ -490,8 +486,7 @@ class XcodeTaskTest {
                 newPodfileLines,
                 podspecDetailsProj,
                 xcodeTargetDetailsIosAppOnly,
-                new File('/SRC/ios/Podfile'),
-                null)
+                new File('/SRC/ios/Podfile'))
         assert expectedPodfileLines == newPodfileLines
     }
 
@@ -509,14 +504,13 @@ class XcodeTaskTest {
                 "end"]
         XcodeTask.XcodeTargetDetails xcodeTargetDetails = new XcodeTask.XcodeTargetDetails(
                 ['IOS-APP'], ['OSX-APP'], ['WATCH-APP'],
-                '6.0.0', '10.4.0', '1.0.0')
+                '6.0.0', '10.6.0', '1.0.0')
 
         List<String> newPodfileLines = XcodeTask.updatePodfile(
                 podfileLines,
                 podspecDetailsProj,
                 xcodeTargetDetails,
-                new File('/SRC/ios/Podfile'),
-                null)
+                new File('/SRC/ios/Podfile'))
 
         List<String> expectedPodfileLines = [
                 "# user comment",
@@ -532,7 +526,7 @@ class XcodeTaskTest {
                 "    j2objc_PROJ",
                 "end",
                 "target 'OSX-APP' do",
-                "    platform :osx, '10.4.0'",
+                "    platform :osx, '10.6.0'",
                 "    j2objc_PROJ",
                 "end",
                 "target 'WATCH-APP' do",
@@ -546,8 +540,7 @@ class XcodeTaskTest {
                 newPodfileLines,
                 podspecDetailsProj,
                 xcodeTargetDetails,
-                new File('/SRC/ios/Podfile'),
-                null)
+                new File('/SRC/ios/Podfile'))
         assert expectedPodfileLines == newPodfileLines
     }
 
@@ -569,8 +562,7 @@ class XcodeTaskTest {
                 [],
                 new XcodeTask.XcodeTargetDetails(
                         [], [], [],
-                        '6.0.0', '10.4.0', '1.0.0'),
-                null,
+                        '6.0.0', '10.6.0', '1.0.0'),
                 null)
     }
 
@@ -591,8 +583,7 @@ class XcodeTaskTest {
                 [],
                 new XcodeTask.XcodeTargetDetails(
                         ['TARGET-DOES-NOT-EXIST'], [], [],
-                        '6.0.0', '10.4.0', '1.0.0'),
-                null,
+                        '6.0.0', '10.6.0', '1.0.0'),
                 null)
     }
 
@@ -729,7 +720,7 @@ class XcodeTaskTest {
                 podspecDetailsProj,
                 new XcodeTask.XcodeTargetDetails(
                         ['IOS-APP-B'], [], [],
-                        '6.0.0', '10.4.0', '1.0.0'))
+                        '6.0.0', '10.6.0', '1.0.0'))
         List<String> expectedPodfileLinesAfterSwap = [
                 "target 'IOS-APP' do",
                 "end",
@@ -764,7 +755,7 @@ class XcodeTaskTest {
                  new XcodeTask.PodspecDetails('PROJ_B', null, null)],
                 new XcodeTask.XcodeTargetDetails(
                         ['IOS-APP', 'IOS-APPTests'], ['OSX-APP', 'OSX-APPTests'], ['WATCH-APP', 'WATCH-APPTests'],
-                        '6.0.0', '10.4.0', '1.0.0'))
+                        '6.0.0', '10.6.0', '1.0.0'))
 
         List<String> expectedPodfileLines = [
                 "target 'IOS-APP' do",
@@ -778,12 +769,12 @@ class XcodeTaskTest {
                 "    j2objc_PROJ_B",
                 "end",
                 "target 'OSX-APP' do",
-                "    platform :osx, '10.4.0'",
+                "    platform :osx, '10.6.0'",
                 "    j2objc_PROJ_A",
                 "    j2objc_PROJ_B",
                 "end",
                 "target 'OSX-APPTests' do",
-                "    platform :osx, '10.4.0'",
+                "    platform :osx, '10.6.0'",
                 "    j2objc_PROJ_A",
                 "    j2objc_PROJ_B",
                 "end",
@@ -840,6 +831,6 @@ class XcodeTaskTest {
                 podspecDetailsProj,
                 new XcodeTask.XcodeTargetDetails(
                         ['TARGET-DOES-NOT-EXIST'], [], [],
-                        '6.0.0', '10.4.0', '1.0.0'))
+                        '6.0.0', '10.6.0', '1.0.0'))
     }
 }

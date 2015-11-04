@@ -37,12 +37,8 @@ import org.gradle.api.tasks.incremental.InputFileDetails
 @CompileStatic
 class TranslateTask extends DefaultTask {
 
-    // Source files outside of the Java main sourceSet.
-    FileCollection additionalMainSrcFiles
-
-    // Note that neither additionalMainSrcFiles nor translatePattern need
-    // to be @Inputs because they are solely inputs to the 2 methods below, which
-    // are already @InputFiles.
+    // Note that translatePattern need not be @Inputs because it is solely an inputs
+    // to the 2 methods below, which are already @InputFiles.
 
     // If the j2objc distribution changes, we want to rerun the task completely.
     // As an InputFile, if the content changes, the task will re-run in non-incremental mode.
@@ -63,12 +59,8 @@ class TranslateTask extends DefaultTask {
         if (J2objcConfig.from(project).translatePattern != null) {
             allFiles = allFiles.matching(J2objcConfig.from(project).translatePattern)
         }
-        FileCollection ret = allFiles
+        FileCollection ret = allFiles.plus(Utils.javaTrees(project, getGeneratedSourceDirs()))
         ret = Utils.mapSourceFiles(project, ret, getTranslateSourceMapping())
-
-        if (additionalMainSrcFiles != null) {
-            ret = ret.plus(additionalMainSrcFiles)
-        }
         return ret
     }
 
@@ -91,7 +83,6 @@ class TranslateTask extends DefaultTask {
         allFiles += getTestSrcFiles()
         allFiles += project.files(getTranslateClasspaths())
         allFiles += project.files(getTranslateSourcepaths())
-        allFiles += project.files(getGeneratedSourceDirs())
         // Only care about changes in the generatedSourceDirs paths and not the contents
         // It assumes that any changes in generated code comes from change in non-generated code
         return allFiles
@@ -216,7 +207,15 @@ class TranslateTask extends DefaultTask {
             logger.debug("Unchanged main files: " + unchangedMainSrcFiles.getFiles().size())
             logger.debug("Unchanged test files: " + unchangedTestSrcFiles.getFiles().size())
 
-            if (!nonSourceFileChanged) {
+            if (nonSourceFileChanged) {
+                // A change outside of the source set directories has occurred, so an incremental build isn't possible.
+                // The most common such change is in the JAR for a dependent library, for example if Java project
+                // that this project depends on had its source changed and was recompiled.
+                Utils.projectClearDir(project, srcGenMainDir)
+                Utils.projectClearDir(project, srcGenTestDir)
+                mainSrcFilesChanged = originalMainSrcFiles
+                testSrcFilesChanged = originalTestSrcFiles
+            } else {
                 // All changes were within srcFiles (i.e. in a Java source-set).
                 int translatedFiles = 0
                 if (srcGenMainDir.exists()) {
@@ -239,14 +238,6 @@ class TranslateTask extends DefaultTask {
                 if (translatedFiles > 0 && J2objcConfig.from(project).UNSAFE_incrementalBuildClosure) {
                     translateArgs.remove('--build-closure')
                 }
-            } else {
-                // A change outside of the source set directories has occurred, so an incremental build isn't possible.
-                // The most common such change is in the JAR for a dependent library, for example if Java project
-                // that this project depends on had its source changed and was recompiled.
-                Utils.projectClearDir(project, srcGenMainDir)
-                Utils.projectClearDir(project, srcGenTestDir)
-                mainSrcFilesChanged = originalMainSrcFiles
-                testSrcFilesChanged = originalTestSrcFiles
             }
         }
 
@@ -355,7 +346,7 @@ class TranslateTask extends DefaultTask {
                 setErrorOutput stderr
             })
 
-        } catch (Exception exception) {
+        } catch (Exception exception) {  // NOSONAR
             // TODO: match on common failures and provide useful help
             throw exception
         }

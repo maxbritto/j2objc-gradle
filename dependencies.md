@@ -45,6 +45,9 @@ Maven Central or jCenter) and each of those libraries provide their Java source 
 in that Maven repository, you can modify your `shared/build.gradle` as follows.  We'll use Gson as the
 example external library.
 
+__Warning:__ If you have multiple j2objc Java projects, this technique will fail with 'duplicate symbol'
+errors in the linker.  Use [this method](#multiple-projects-and-external-libraries) instead.
+
 ```gradle
 // Before: shared/build.gradle
 dependencies {
@@ -107,7 +110,7 @@ dependencies {
 ```
 
 You can see many examples of configuring builds for third-party libraries
-[here](https://github.com/madvay/j2objc-common-libs-e2e-test/tree/master/libraryBuilds).
+[here](https://github.com/j2objc-contrib/j2objc-common-libs-e2e-test/tree/master/libraryBuilds).
 
 
 ## Multiple projects and external libraries
