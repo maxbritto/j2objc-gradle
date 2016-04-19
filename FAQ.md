@@ -20,6 +20,7 @@ Paste the results below, replacing existing contents.
 -->
 - [Start here for debugging (aka it's not working; aka don't panic)](#start-here-for-debugging-aka-its-not-working-aka-dont-panic)
 - [How do I develop with Xcode?](#how-do-i-develop-with-xcode)
+- [How do I build against a specific version of OS X, iOS or watchOS?](#how-do-i-build-against-a-specific-version-of-os-x-ios-or-watchos)
 - [How can I speed up my build?](#how-can-i-speed-up-my-build)
 - [What libraries are linked by default?](#what-libraries-are-linked-by-default)
 - [How do I setup dependencies with J2ObjC?](#how-do-i-setup-dependencies-with-j2objc)
@@ -31,6 +32,8 @@ Paste the results below, replacing existing contents.
 - [Why is my clean build failing?](#why-is-my-clean-build-failing)
 - [How do I include Java files from additional source directories?](#how-do-i-include-java-files-from-additional-source-directories)
 - [How do I develop with Swift?](#how-do-i-develop-with-swift)
+- [How do I specify additional Xcode build configurations?](#how-do-i-specify-additional-xcode-build-configurations)
+- [How do I manually configure the Cocoapods Podfile?](#how-do-i-manually-configure-the-cocoapods-podfile)
 - [How do I manually configure my Xcode project to use the translated libraries?](#how-do-i-manually-configure-my-xcode-project-to-use-the-translated-libraries)
 - [How do I update my J2ObjC translated code from Xcode?](#how-do-i-update-my-j2objc-translated-code-from-xcode)
 - [How do I work with Package Prefixes?](#how-do-i-work-with-package-prefixes)
@@ -43,6 +46,7 @@ Paste the results below, replacing existing contents.
 - [Cycle Finder Advanced Setup](#cycle-finder-advanced-setup)
 - [How do I develop on Windows or Linux?](#how-do-i-develop-on-windows-or-linux)
 - [How do I fix missing required architecture linker warning?](#how-do-i-fix-missing-required-architecture-linker-warning)
+- [How do I fix Undefined symbols for architecture linker warning?](#how-do-i-fix-undefined-symbols-for-architecture-linker-warning)
 - [How do I solve the Eclipse error message Obtaining Gradle model...?](#how-do-i-solve-the-eclipse-error-message-obtaining-gradle-model)
 
 
@@ -67,16 +71,19 @@ https://plugins.gradle.org/plugin/com.github.j2objccontrib.j2objcgradle.
 and you've verified that your J2OBJC_HOME is set correctly, you may have stale Gradle
 caches, which can be cleared as follows.  Note the following steps will cause you to
 rebuild everything, so the next build may take a long time.
-  ```shell
-  # (from your Gradle project's root directory)
-  # Stops any Gradle daemons if they are running.
-  ./gradlew --stop
-  # Remove cached Gradle database.
-  rm -rf .gradle/
-  # Remove cached Gradle outputs.
-  rm -rf build/
-  ```
+
+```shell
+# (from your Gradle project's root directory)
+# Stops any Gradle daemons if they are running.
+./gradlew --stop
+# Remove cached Gradle database.
+rm -rf .gradle/
+# Remove cached Gradle outputs.
+rm -rf build/
+```
+
 Now try building again.
+
 
 ### How do I develop with Xcode?
 
@@ -100,12 +107,29 @@ add the static libraries and translated header directories to your Xcode project
 Also see the FAQ note on [developing with Swift](#how-do-i-develop-with-swift).
 
 
+### How do I build against a specific version of OS X, iOS or watchOS?
+
+For example, to use methods only available in iOS 9.2:
+
+```gradle
+// File: shared/build.gradle
+j2objcConfig {
+    minVersionIos '9.2'
+    ...
+}
+```
+
+The settings are `minVersionIos, minVersionOsx & minVersionWatchos`. You can see the
+defaults in [J2objcConfig.groovy](https://github.com/j2objc-contrib/j2objc-gradle/blob/master/src/main/groovy/com/github/j2objccontrib/j2objcgradle/J2objcConfig.groovy#L636).
+
+
 ### How can I speed up my build?
 
 You can reduce the build time by 50% by skipping the release binaries by adding the
 following to your root level `local.properties` file:
 
 ```properties
+# File: local.properties
 j2objc.release.enabled=false
 ```
 
@@ -128,18 +152,20 @@ by default when using the plugin. To add other libraries, see the FAQs about
 [dependencies](#how-do-i-setup-dependencies-with-j2objc).
 The standard libraries are:
 
-    com.google.guava:guava
-    com.google.j2objc:j2objc-annotations
-    com.google.protobuf:protobuf-java
-    junit:junit (test only)
-    org.mockito:mockito-core (test only)
-    org.hamcrest:hamcrest-core (test only)
+```
+com.google.guava:guava
+com.google.j2objc:j2objc-annotations
+com.google.protobuf:protobuf-java
+junit:junit (test only)
+org.mockito:mockito-core (test only)
+org.hamcrest:hamcrest-core (test only)
+```
 
 Note that this only covers the Objective-C libraries; if you want to use these
 libraries in your Java code, you must still include the standard dependency directives like:
 
 ```gradle
-// shared/build.gradle
+// File: shared/build.gradle
 dependencies {
     compile 'com.google.guava:guava:18.0'
     testCompile 'junit:junit:4.11'
@@ -160,11 +186,15 @@ See [dependencies.md](dependencies.md).
 The .gitignore file should follow existing conventions for Android Studio and Xcode.
 Once that's configured, check that it contains the following:
 
-    # Includes j2objc.home setting (Android Studio should have added this)
-    local.properties
+```properties
+# File: .gitignore
 
-    # CocoaPods temporary files used for Xcode
-    Pods/
+# Includes j2objc.home setting (Android Studio should have added this)
+local.properties
+
+# CocoaPods temporary files used for Xcode
+Pods/
+```
 
 
 ### What is the recommended folder structure for my app?
@@ -226,6 +256,7 @@ with `translateArgs`.
 Make sure your arguments are separate strings, not a single space-concatenated string.
 
 ```gradle
+// File: shared/build.gradle
 j2objcConfig {
     // CORRECT
     translateArgs '-use-arc'
@@ -236,6 +267,7 @@ j2objcConfig {
 
     // WRONG
     translateArgs '-use-arc -prefixes file.prefixes'
+    ...
 }
 ```
 
@@ -273,6 +305,7 @@ For example, if you want to include files from `src-gen/base` both into your JAR
 your Objective C libraries, then add to your `shared/build.gradle`:
 
 ```gradle
+// File: shared/build.gradle
 sourceSets {
     main {
         java {
@@ -301,6 +334,78 @@ you'd like to access from Swift code.
 // Included from `shared/build/j2objcOutputs/src/main/objc`
 #import "MyClassOne.h"
 #import "MyClassTwo.h"
+```
+
+
+### How do I specify additional Xcode build configurations?
+
+Set `xcodeDebugConfigurations` and `xcodeReleaseConfigurations` to specify which build
+configurations should link the debug and release builds of the translated libs, respectively.
+These default to `['Debug']` and `['Release']` which correspond to Xcode's default build
+configuration names. Setting either of these to an empty array will omit the respective pod
+line from the "pod method".
+
+For example, if you have a build configuration called "Beta" for sending to internal testers
+and one called "Preview" for doing ad-hoc distribution:
+
+```gradle
+// File: shared/build.gradle
+j2objcConfig {
+    xcodeDebugConfigurations += ['Beta']
+    xcodeReleaseConfigurations += ['Preview']
+    ...
+}
+```
+
+
+### How do I manually configure the Cocoapods Podfile?
+
+The plugin will try to automatically update the Cocoapods Podfile but that may fail if
+the Podfile is too complex. In that situation, you can manually configure the pod method.
+
+```gradle
+// File: shared/build.gradle
+j2objcConfig {
+    xcodeTargetsManualConfig true
+    ...
+}
+```
+
+The "pod method" definition will still be added automatically (e.g.
+`def j2objc_shared...`). However, the "pod method" will not be added to any
+targets, so that needs to be done manually. See example of the Podfile below:
+
+```
+// File: ios/Podfile
+...
+
+# J2ObjC Gradle Plugin - PodMethods - DO NOT MODIFY START - can be moved as a block
+def j2objc_shared
+    pod 'j2objc-shared-debug', :configuration => ['Debug'], :path => '../shared/build/j2objcOutputs'
+    pod 'j2objc-shared-release', :configuration => ['Release'], :path => '../shared/build/j2objcOutputs'
+end
+# J2ObjC Gradle Plugin - PodMethods - DO NOT MODIFY END
+
+<SOME COMPLEX RUBY>
+    ...
+    # NOTE: this line must be added manually for the relevant targets:
+    j2objc_shared
+    ...
+end
+```
+
+To disable all modifications of the Podfile, disable the `j2objcXcode` task.
+This will also skip the `pod install` step. The podspec files will still
+be written (done by the `j2objcPodspec` task).
+
+```gradle
+// File: shared/build.gradle
+j2objcConfig {
+    ...
+}
+j2objcXcode {
+    enabled = false
+}
 ```
 
 
@@ -373,17 +478,20 @@ For the class `com.example.dir.MyClass`, J2ObjC will by default translate the na
 to something much more manageable, like `CedMyClass`. See the example below on how to do this.
 Also see the reference docs on [package name prefixes](http://j2objc.org/docs/Package-Prefixes.html).
 
-```groovy
-// File: build.gradle
+```gradle
+// File: shared/build.gradle
 j2objcConfig {
-    translateArgs '--prefixes', 'resources/prefixes.properties'
+    translateArgs '--prefixes', 'src/main/resources/prefixes.properties'
     ...
 }
 ```
 
-```
-// File: resources/prefixes.properties
-// Storing at this location allows Class.forName(javaName) to work for mapped class.
+Storing `prefixes.properties` in the resource folder will mean that it's copied in to the
+Xcode build. Without having this file in the Xcode, calls to `Class.forName("MyClass")`
+will fail for the mapped classes.
+
+```properties
+# File: shared/src/main/resources/prefixes.properties
 com.example.dir: Ced
 com.example.dir.subdir: Ced
 ```
@@ -395,6 +503,7 @@ This will map packages such as com.example.dir and com.example.dir.subdir both t
 com.example.dir.*: Ced
 ```
 
+
 ### How do I enable ARC for my translated Objective-C classes?
 
 __Note__: The use of ARC for the translated code is not recommended and is not required
@@ -404,9 +513,11 @@ Add the following to your configuration block. See
 [here](https://developer.apple.com/library/mac/releasenotes/ObjectiveC/RN-TransitioningToARC/Introduction/Introduction.html#//apple_ref/doc/uid/TP40011226-CH1-SW15).
 
 ```gradle
+// File: shared/build.gradle
 j2objcConfig {
    translateArgs '-use-arc'
    extraObjcCompilerArgs '-fobjc-arc'
+   ...
 }
 ```
 
@@ -418,6 +529,7 @@ You must always call `finalConfigure()` at the end of `j2objcConfig {...}` withi
 call even if you do not need to customize any other `j2objConfig` option.
 
 ```gradle
+// File: shared/build.gradle
 j2objcConfig {
     ...
     finalConfigure()
@@ -510,6 +622,7 @@ j2objcConfig {
     cycleFinderArgs '--whitelist', 'J2OBJC_REPO/jre_emul/cycle_whitelist.txt'
     cycleFinderArgs '--sourcefilelist', 'J2OBJC_REPO/jre_emul/build_result/java_sources.mf'
     cycleFinderExpectedCycles 0
+    ...
 }
 ```
 
@@ -548,17 +661,59 @@ Undefined symbols for architecture i386:
       type metadata accessor for ObjectiveC.ComExampleShared in ViewController.o
 ld: symbol(s) not found for architecture i386
 ```
-You are not building all the neccessary architectures.
+You are not building all the necessary architectures.
 
 By default (for performance), we build only modern iOS device and simulator
 architectures. If you need i386 for older simulators (iPhone 5, 5c and earlier
 devices), add the following to your build.gradle file:
 
 ```gradle
-// File: build.gradle
+// File: shared/build.gradle
 j2objcConfig {
     supportedArchs += ['ios_i386']
+    ...
 }
+```
+
+### How do I fix `Undefined symbols for architecture` linker warning?
+
+This usually occurs with `architecture x86_64` when using the simulator and
+`architecture arm64` when running on a device. The error should look
+similar to this:
+
+```
+Undefined symbols for architecture x86_64:
+  "_OBJC_METACLASS_$_MyClassMethodName", referenced from:
+     _OBJC_METACLASS_$_MethodName in MyClass.o
+```
+
+It can usually be fixed by manually running the Cocoapods install command
+(adjust based on your Xcode directory):
+
+```shell
+(cd Xcode && pod install)
+```
+
+Note that re-running the build from Gradle as it will skip re-running the
+`j2objcXcode` task unless one of the dependencies has changed.
+
+The problem occurs due to flakiness in Cocoapods. You can see this in the
+linker output, it fails to include the `-lshared-j2objc` library in the linker
+flags. When working correctly, the linker flags should include the following:
+
+```
+-ObjC -lObjC -lshared-j2objc -lguava -licucore -ljavax_inject -ljre_emul -ljsr305 -lz
+```
+
+If you still have further issues, use the following commands to investigate
+the built libraries:
+
+```shell
+# list the architectures in the library. This should include "x86_64":
+lipo -info shared/build/j2objcOutputs/lib/iosDebug/libshared-j2objc.a
+
+# list out the methods in the file and look for the missing methods:
+otool -SV base/build/j2objcOutputs/lib/iosDebug/libbase-j2objc.a
 ```
 
 

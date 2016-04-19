@@ -55,12 +55,33 @@ class Utils {
     // Prevent construction of this class, confines usage to static methods
     private Utils() { }
 
-    static void checkMinGradleVersion(GradleVersion gradleVersion) {
+    static boolean checkGradleVersion(boolean throwIfUnsupported) {
+        return checkGradleVersion(GradleVersion.current(), throwIfUnsupported)
+    }
+
+    @VisibleForTesting
+    static boolean checkGradleVersion(GradleVersion gradleVersion, boolean throwIfUnsupported) {
+        String errorMsg = ''
+
         final GradleVersion minGradleVersion = GradleVersion.version('2.4')
-        if (gradleVersion.compareTo(minGradleVersion) < 0) {
-            throw new InvalidUserDataException(
-                    "J2ObjC Gradle Plugin requires minimum Gradle version: $minGradleVersion")
+        if (gradleVersion.compareTo(GradleVersion.version('2.4')) < 0) {
+            errorMsg = "J2ObjC Gradle Plugin requires minimum Gradle version: $minGradleVersion"
         }
+
+        final GradleVersion unsupportedGradleVersion = GradleVersion.version('2.9')
+        if (gradleVersion.compareTo(unsupportedGradleVersion) >= 0) {
+            errorMsg = "Please use Gradle 2.8 as $unsupportedGradleVersion is unsupported:\n" +
+                       "https://github.com/j2objc-contrib/j2objc-gradle/issues/568"
+        }
+
+        if (!errorMsg.isEmpty()) {
+            if (throwIfUnsupported) {
+                throw new InvalidUserDataException(errorMsg)
+            } else {
+                return true
+            }
+        }
+        return false
     }
 
     static List<Integer> parseVersionComponents(String ver) {
@@ -205,8 +226,8 @@ class Utils {
         if (!proj.plugins.hasPlugin('java')) {
             String message =
                     "J2ObjC Gradle Plugin: missing 'java' plugin for '${proj.name}' project.\n" +
-                    "This is a requirement for using J2ObjC. Please see usage information at:\n" +
-                    "https://github.com/j2objc-contrib/j2objc-gradle/#usage"
+                    "This is a requirement for using J2ObjC. Please see:\n" +
+                    "https://github.com/j2objc-contrib/j2objc-gradle/#quick-start-guide"
             throw new InvalidUserDataException(message)
         }
     }
@@ -413,7 +434,7 @@ class Utils {
     static FileTree javaTrees(Project proj, List<String> treePaths) {
         List<? extends FileTree> trees =
             treePaths.collect({ String treePath -> proj.fileTree(dir: treePath, includes: ["**/*.java"]) })
-        return new UnionFileTree("javaTrees_j2objc", trees)
+        return new UnionFileTree("javaTrees_j2objc", (Collection<? extends FileTree>) trees)
     }
 
     static List<String> j2objcLibs(String j2objcHome,
@@ -488,6 +509,14 @@ class Utils {
         }
 
         return null
+    }
+
+    static String toQuotedList(List<String> listString) {
+        if (listString.isEmpty()) {
+            return ''
+        } else {
+            return "'${listString.join("','")}'"
+        }
     }
 
     @VisibleForTesting
@@ -694,5 +723,26 @@ class Utils {
             }
         }
         return files
+    }
+
+
+    // Max number of characters for OS command line
+    static int maxArgs() {
+        if (isMacOSX()) {
+            // http://www.in-ulm.de/~mascheck/various/argmax/
+            return 262144
+        }
+        if (isWindows()) {
+            // Assume Windows XP or later which has max of 8191
+            // https://support.microsoft.com/en-us/kb/830473
+            return 8191
+        }
+        if (isLinux()) {
+            // v2.6.23 (released 2007) or later limit is 1/4 of stack size,
+            // so Linux is presumed to have no limit
+            // http://www.in-ulm.de/~mascheck/various/argmax/
+            return Integer.MAX_VALUE
+        }
+        assert false
     }
 }

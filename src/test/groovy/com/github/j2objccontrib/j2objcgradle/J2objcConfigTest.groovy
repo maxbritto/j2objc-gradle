@@ -207,41 +207,56 @@ class J2objcConfigTest {
     @Test
     void testAppendArgs() {
         List<String> args = new ArrayList()
-        J2objcConfig.appendArgs(args, 'testArgs', '-arg1', '-arg2')
+        J2objcConfig.appendArgs(args, 'testArgs', true, '-arg1', '-arg2')
 
         List<String> expected = Arrays.asList('-arg1', '-arg2')
         assert expected == args
     }
 
     @Test(expected = InvalidUserDataException.class)
-    void testAppendArgs_Null() {
+    void testAppendArgs_Spaces() {
         List<String> args = new ArrayList()
-        J2objcConfig.appendArgs(args, 'testArgs', null)
+        J2objcConfig.appendArgs(args, 'testArgs', true, '-arg1 -arg2')
+    }
+
+    @Test
+    void testVerifyNoSpaceArgs_Accept() {
+        J2objcConfig.verifyArgs('testArgs', true, '-arg1', '-arg2')
     }
 
     @Test(expected = InvalidUserDataException.class)
-    void testAppendArgs_Spaces() {
+    void testVerifyNoSpaceArgs_RejectNull() {
         List<String> args = new ArrayList()
-        J2objcConfig.appendArgs(args, 'testArgs', '-arg1 -arg2')
+        J2objcConfig.verifyArgs('testArgs', true, null)
     }
 
     @Test
-    void testVerifyNoSpaceArgs_NoSpace() {
-        J2objcConfig.verifyNoSpaceArgs('testArgs', '-arg1', '-arg2')
+    void testVerifyNoSpaceArgs_RejectOnlyWhitespace() {
+        expectedException.expect(InvalidUserDataException.class)
+        expectedException.expectMessage("testArgs is all whitespace: '    '")
+
+        J2objcConfig.verifyArgs('testArgs', true, '    ')
     }
 
     @Test
-    void testVerifyNoSpaceArgs_Space() {
+    void testVerifyNoSpaceArgs_RejectSpaces() {
         expectedException.expect(InvalidUserDataException.class)
         expectedException.expectMessage('argument should not contain spaces and be written out as distinct entries')
         expectedException.expectMessage("testArgs '-arg1', '-arg2'")
 
-        J2objcConfig.verifyNoSpaceArgs('testArgs', '-arg1 -arg2')
+        J2objcConfig.verifyArgs('testArgs', true, '-arg1 -arg2')
+    }
+
+    @Test
+    void testVerifyNoSpaceArgs_AllowSpaces() {
+        J2objcConfig.verifyArgs('testArgs', false, '-arg1 -arg2')
     }
 
     // A small number of the configuration variable must be String[]
     // instead of List<String>, this tests 'extraLinkerArgs' as an example.
     @Test
+    // Skip to allow: "= ['-arg1']" as it would be used in j2objcConfig
+    @CompileStatic(TypeCheckingMode.SKIP)
     void testStringArrayArgs() {
         J2objcConfig j2objcConfig = new J2objcConfig(proj)
         j2objcConfig.extraLinkerArgs = ['-arg1']
@@ -269,6 +284,8 @@ class J2objcConfigTest {
     }
 
     @Test
+    // Skip to allow: "+= 'ios_armv7s'" as it would be used in j2objcConfig
+    @CompileStatic(TypeCheckingMode.SKIP)
     void testSupportedAndEnabledArchs_SubsetEnabledArchsSpecifiedWithAdditionalSupportedArchs() {
         J2objcConfig j2objcConfig = TestingUtils.setupProjectJ2objcConfig(
                 new TestingUtils.ProjectConfig(createJ2objcConfig: true,

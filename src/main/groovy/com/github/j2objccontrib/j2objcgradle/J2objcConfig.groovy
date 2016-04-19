@@ -153,7 +153,7 @@ class J2objcConfig {
      * @param generatedSourceDirs adds generated source directories for j2objc translate
      */
     void generatedSourceDirs(String... generatedSourceDirs) {
-        appendArgs(this.generatedSourceDirs, 'generatedSourceDirs', generatedSourceDirs)
+        appendArgs(this.generatedSourceDirs, 'generatedSourceDirs', true, generatedSourceDirs)
     }
 
 
@@ -174,7 +174,7 @@ class J2objcConfig {
      * @param cycleFinderArgs add args for 'cycle_finder' tool
      */
     void cycleFinderArgs(String... cycleFinderArgs) {
-        appendArgs(this.cycleFinderArgs, 'cycleFinderArgs', cycleFinderArgs)
+        appendArgs(this.cycleFinderArgs, 'cycleFinderArgs', true, cycleFinderArgs)
     }
     /**
      * Expected number of cycles, defaults to all those found in JRE.
@@ -202,7 +202,7 @@ class J2objcConfig {
      * @param translateArgs add args for the 'j2objc' tool
      */
     void translateArgs(String... translateArgs) {
-        appendArgs(this.translateArgs, 'translateArgs', translateArgs)
+        appendArgs(this.translateArgs, 'translateArgs', true, translateArgs)
     }
 
     /**
@@ -228,7 +228,7 @@ class J2objcConfig {
      *  @param translateClasspaths add libraries for -classpath argument
      */
     void translateClasspaths(String... translateClasspaths) {
-        appendArgs(this.translateClasspaths, 'translateClasspaths', translateClasspaths)
+        appendArgs(this.translateClasspaths, 'translateClasspaths', true, translateClasspaths)
     }
 
     /**
@@ -241,7 +241,7 @@ class J2objcConfig {
      *  @param translateSourcepaths args add source jar for translation
      */
     void translateSourcepaths(String... translateSourcepaths) {
-        appendArgs(this.translateSourcepaths, 'translateSourcepaths', translateSourcepaths)
+        appendArgs(this.translateSourcepaths, 'translateSourcepaths', true, translateSourcepaths)
     }
 
     /**
@@ -512,7 +512,7 @@ class J2objcConfig {
      * @param testArgs add args for the 'j2objcTest' task
      */
     void testArgs(String... testArgs) {
-        appendArgs(this.testArgs, 'testArgs', testArgs)
+        appendArgs(this.testArgs, 'testArgs', true, testArgs)
     }
 
     /**
@@ -572,7 +572,7 @@ class J2objcConfig {
      * @param extraObjcSrcDirs add directories for Objective-C source to be compiled
      */
     void extraObjcSrcDirs(String... extraObjcSrcDirs) {
-        verifyNoSpaceArgs('extraObjcSrcDirs', extraObjcSrcDirs)
+        verifyArgs('extraObjcSrcDirs', true, extraObjcSrcDirs)
         for (String arg in extraObjcSrcDirs) {
             this.extraObjcSrcDirs += arg
         }
@@ -588,7 +588,7 @@ class J2objcConfig {
      * @param extraObjcCompilerArgs add arguments to pass to the native compiler.
      */
     void extraObjcCompilerArgs(String... extraObjcCompilerArgs) {
-        verifyNoSpaceArgs('extraObjcCompilerArgs', extraObjcCompilerArgs)
+        verifyArgs('extraObjcCompilerArgs', true, extraObjcCompilerArgs)
         for (String arg in extraObjcCompilerArgs) {
             this.extraObjcCompilerArgs += arg
         }
@@ -604,7 +604,7 @@ class J2objcConfig {
      * @param extraLinkerArgs add arguments to pass to the native linker.
      */
     void extraLinkerArgs(String... extraLinkerArgs) {
-        verifyNoSpaceArgs('extraLinkerArgs', extraLinkerArgs)
+        verifyArgs('extraLinkerArgs', true, extraLinkerArgs)
         for (String arg in extraLinkerArgs) {
             this.extraLinkerArgs += arg
         }
@@ -632,8 +632,9 @@ class J2objcConfig {
      * <p/>
      * See https://developer.apple.com/library/ios/documentation/DeveloperTools/Conceptual/cross_development/Configuring/configuring.html#//apple_ref/doc/uid/10000163i-CH1-SW2
      */
-    // Matches the oldest version supported in Xcode 7
-    String minVersionIos = '6.0'
+    // Chosen to broaden compatibility for initial use
+    // Maintain at one version behind current
+    String minVersionIos = '8.3'
 
     /**
      * The minimum OS X version to build against.  You cannot use APIs that are not supported
@@ -651,15 +652,16 @@ class J2objcConfig {
      * <p/>
      * See https://developer.apple.com/library/ios/documentation/DeveloperTools/Conceptual/cross_development/Configuring/configuring.html#//apple_ref/doc/uid/10000163i-CH1-SW2
      */
-    // Matches the oldest version supported in Xcode 7
-    String minVersionWatchos = '1.0'
+    // Chosen to broaden compatibility for initial use
+    // Maintain at one version behind current
+    String minVersionWatchos = '2.0'
 
     // XCODE
     /**
      * Directory of the target Xcode project.
      *
      * Suggested location is '../ios'
-     * See J2ObjC Plugin <a href="https://github.com/j2objc-contrib/j2objc-gradle/blob/master/README.md#folder-structure">Folder Structure</a>
+     * See J2ObjC Plugin <a href="https://github.com/j2objc-contrib/j2objc-gradle/blob/master/FAQ.md#what-is-the-recommended-folder-structure-for-my-app">Folder Structure</a>
      *
      */
     String xcodeProjectDir = null
@@ -677,7 +679,7 @@ class J2objcConfig {
      * @param xcodeTargetsIos targets to link to the generated libraries.
      */
     void xcodeTargetsIos(String... xcodeTargetsIos) {
-        appendArgs(this.xcodeTargetsIos, 'xcodeTargetsIos', xcodeTargetsIos)
+        appendArgs(this.xcodeTargetsIos, 'xcodeTargetsIos', false, xcodeTargetsIos)
     }
 
     /**
@@ -693,7 +695,7 @@ class J2objcConfig {
      * @param xcodeTargetsOsx targets to link to the generated libraries.
      */
     void xcodeTargetsOsx(String... xcodeTargetsOsx) {
-        appendArgs(this.xcodeTargetsOsx, 'xcodeTargetsOsx', xcodeTargetsOsx)
+        appendArgs(this.xcodeTargetsOsx, 'xcodeTargetsOsx', false, xcodeTargetsOsx)
     }
 
     /**
@@ -709,9 +711,47 @@ class J2objcConfig {
      * @param xcodeTargetsWatchos targets to link to the generated libraries.
      */
     void xcodeTargetsWatchos(String... xcodeTargetsWatchos) {
-        appendArgs(this.xcodeTargetsWatchos, 'xcodeTargetsWatchos', xcodeTargetsWatchos)
+        appendArgs(this.xcodeTargetsWatchos, 'xcodeTargetsWatchos', false, xcodeTargetsWatchos)
     }
 
+    /**
+     * Allows manual config of Xcode targets in the Podfile (default is false).
+     *
+     * When set to true, this allows manual configuring of the Podfile targets.
+     * This is necessary when your Podfile is too complex to be automatically
+     * updated. It will still add the "Pod Method" (e.g. j2objc_shared) but it
+     * will not update the targets within the Podfile. When used, you must also
+     * set xcodeTargets{Ios|Osx|Watchos) to empty.
+     */
+    boolean xcodeTargetsManualConfig = false
+
+    /**
+     * The Xcode build configurations which should link to the generated debug libraries.
+     * If set to an empty array, the Debug configuration will be omitted from the "pod method".
+     * <p/>
+     * For example:
+     * <pre>
+     * j2objcConfig {
+     *     xcodeDebugConfigurations += ['Beta']
+     *     ...
+     * }
+     * </pre>
+     */
+    List<String> xcodeDebugConfigurations = ['Debug']
+
+    /**
+     * The Xcode build configurations which should link to the generated release libraries.
+     * If set to an empty array, the Release configuration will be omitted from the "pod method".
+     * <p/>
+     * For example:
+     * <pre>
+     * j2objcConfig {
+     *     xcodeReleaseConfigurations += ['Preview']
+     *     ...
+     * }
+     * </pre>
+     */
+    List<String> xcodeReleaseConfigurations = ['Release']
 
     protected boolean finalConfigured = false
     /**
@@ -720,6 +760,20 @@ class J2objcConfig {
      */
     @VisibleForTesting
     void finalConfigure() {
+
+        // Gradle 2.9 build will fail if it calls configureNativeCompilation:
+        //     https://github.com/j2objc-contrib/j2objc-gradle/issues/568
+        // Return early without error to avoid deadlock:
+        //     https://github.com/j2objc-contrib/j2objc-gradle/issues/585
+        // Exception is thrown when TranslateTask is run. Safest approach is to disable
+        // all setup logic even though only NativeCompilation appears to cause any issue.
+        if (Utils.checkGradleVersion(false)) {
+            configureNativeCompilationForUnsupported()
+            // Avoid misleading error message that finalConfigured() wasn't in build.gradle
+            finalConfigured = true
+            return
+        }
+
         validateConfiguration()
         // Conversion of compile and testCompile dependencies occurs optionally.
         if (autoConfigureDeps) {
@@ -812,8 +866,8 @@ class J2objcConfig {
 
         // TODO: watchOS build support
         if (xcodeTargetsWatchos.size() > 0) {
-            throw new InvalidUserDataException(
-                    "WatchOS isn't yet supported, please unset xcodeTargetsWatchos for now." +
+            project.logger.warn(
+                    "watchOS isn't yet supported, please unset xcodeTargetsWatchos for now.\n" +
                     "Follow this issue for updates: https://github.com/j2objc-contrib/j2objc-gradle/issues/525")
         }
     }
@@ -825,6 +879,10 @@ class J2objcConfig {
         // https://discuss.gradle.org/t/problem-with-model-block-when-switching-from-2-2-1-to-2-4/9937
         nativeCompilation.apply(project.file("${project.buildDir}/j2objcSrcGenMain"),
                                 project.file("${project.buildDir}/j2objcSrcGenTest"))
+    }
+
+    protected void configureNativeCompilationForUnsupported() {
+        nativeCompilation.applyWhenUnsupported()
     }
 
     protected void convertDeps() {
@@ -888,23 +946,29 @@ class J2objcConfig {
     //     translateArgs '--no-package-directories', '--prefixes', 'prefixes.properties'
     // }
     @VisibleForTesting
-    static void appendArgs(List<String> listArgs, String nameArgs, String... args) {
-        verifyNoSpaceArgs(nameArgs, args)
+    static void appendArgs(List<String> listArgs, String nameArgs, boolean rejectSpaces, String... args) {
+        verifyArgs(nameArgs, rejectSpaces, args)
         listArgs.addAll(Arrays.asList(args))
     }
 
     // Verify that no argument contains a space
     @VisibleForTesting
-    static void verifyNoSpaceArgs(String nameArgs, String... args) {
+    static void verifyArgs(String nameArgs, boolean rejectSpaces, String... args) {
         if (args == null) {
             throw new InvalidUserDataException("$nameArgs == null!")
         }
         for (String arg in args) {
-            if (arg.contains(' ')) {
-                String rewrittenArgs = "'" + arg.split(' ').join("', '") + "'"
+            if (arg.isAllWhitespace()) {
                 throw new InvalidUserDataException(
-                        "'$arg' argument should not contain spaces and be written out as distinct entries:\n" +
-                        "$nameArgs $rewrittenArgs")
+                        "$nameArgs is all whitespace: '$arg'")
+            }
+            if (rejectSpaces) {
+                if (arg.contains(' ')) {
+                    String rewrittenArgs = "'" + arg.split(' ').join("', '") + "'"
+                    throw new InvalidUserDataException(
+                            "'$arg' argument should not contain spaces and be written out as distinct entries:\n" +
+                            "$nameArgs $rewrittenArgs")
+                }
             }
         }
     }

@@ -32,7 +32,6 @@ import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.logging.LogLevel
-import org.gradle.util.GradleVersion
 
 /*
  * Main plugin class for creation of extension object and all the tasks.
@@ -56,7 +55,6 @@ class J2objcPlugin implements Plugin<Project> {
 
         // This avoids a lot of "project." prefixes, such as "project.tasks.create"
         project.with {
-            Utils.checkMinGradleVersion(GradleVersion.current())
             getPluginManager().apply(JavaPlugin)
 
             extensions.create('j2objcConfig', J2objcConfig, project)
@@ -66,14 +64,14 @@ class J2objcPlugin implements Plugin<Project> {
 
                 if (!evaluatedProject.j2objcConfig.isFinalConfigured()) {
                     logger.error("Project '${evaluatedProject.name}' is missing finalConfigure():\n" +
-                                 "https://github.com/j2objc-contrib/j2objc-gradle/blob/master/FAQ.md#How-do-I-call-finalConfigure")
+                                 "https://github.com/j2objc-contrib/j2objc-gradle/blob/master/FAQ.md#how-do-i-call-finalconfigure")
                 }
 
                 boolean arcTranslateArg = '-use-arc' in evaluatedProject.j2objcConfig.translateArgs
                 boolean arcCompilerArg = '-fobjc-arc' in evaluatedProject.j2objcConfig.extraObjcCompilerArgs
                 if (arcTranslateArg && !arcCompilerArg || !arcTranslateArg && arcCompilerArg) {
                     logger.error("Project '${evaluatedProject.name}' is missing required ARC flags:\n" +
-                                 "https://github.com/j2objc-contrib/j2objc-gradle/blob/master/FAQ.md#how-do-i-enable-arc-for-my-objective-c-classes")
+                                 "https://github.com/j2objc-contrib/j2objc-gradle/blob/master/FAQ.md#how-do-i-enable-arc-for-my-translated-objective-c-classes")
                 }
             }
 
